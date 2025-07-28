@@ -1,0 +1,17 @@
+[package]
+name = "ofx-parser"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+log = { workspace = true }
+thiserror = { workspace = true }
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+quick-xml = { version = "0.38", features = ["serialize", "encoding"] }
+regex = "1.11"
+
+[dev-dependencies]
+rstest = { workspace = true }
+mockall = { workspace = true }
+pretty_assertions = { workspace = true }
