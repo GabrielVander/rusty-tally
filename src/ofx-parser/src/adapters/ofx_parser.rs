@@ -7,8 +7,13 @@ use chrono::{DateTime, FixedOffset};
 use log::{debug, error, info, warn};
 use quick_xml::de::from_str;
 use regex::Regex;
-use serde::Deserialize;
 use thiserror::Error;
+
+use super::models::ofx_document_xml::{
+    BalanceXml, BankAccountFromXml, BankTransactionListXml, FinancialInstitutionXml, OfxBodyXml,
+    OfxDocumentXml, OfxHeaderXml, SignOnResponseXml, StatementResponseXml,
+    StatementTransactionResponseXml, StatusXml, TransactionXml,
+};
 
 #[derive(Error, Debug)]
 pub enum OfxError {
@@ -35,267 +40,6 @@ pub enum OfxError {
 }
 
 pub type OfxResult<T> = Result<T, OfxError>;
-
-#[derive(Debug)]
-struct OfxDocumentXml {
-    header: OfxHeader,
-    body: OfxBodyXml,
-}
-
-impl From<OfxDocumentXml> for OfxDocument {
-    fn from(value: OfxDocumentXml) -> Self {
-        OfxDocument {
-            header: value.header.into(),
-            body: value.body.into(),
-        }
-    }
-}
-struct OfxHeaderXml {
-    version: String,
-    security: Option<String>,
-    encoding: Option<String>,
-    charset: Option<String>,
-    compression: Option<String>,
-    old_file_uid: Option<String>,
-    new_file_uid: Option<String>,
-}
-
-impl From<OfxHeaderXml> for OfxHeader {
-    fn from(value: OfxHeaderXml) -> Self {
-        OfxHeader {
-            version: value.version,
-            security: value.security,
-            encoding: value.encoding,
-            charset: value.charset,
-            compression: value.compression,
-            old_file_uid: value.old_file_uid,
-            new_file_uid: value.new_file_uid,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-struct OfxBodyXml {
-    signonmsgsrsv1: SignOnMessageResponseV1Xml,
-    bankmsgsrsv1: BankMessageResponseV1Xml,
-}
-
-impl From<OfxBodyXml> for OfxBody {
-    fn from(value: OfxBodyXml) -> Self {
-        OfxBody {
-            sign_on_response: value.signonmsgsrsv1.sonrs.into(),
-            bank_msgs: value
-                .bankmsgsrsv1
-                .stmttrnrs
-                .iter()
-                .map(|i: &StatementTransactionResponseXml| i.into())
-                .collect(),
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-struct SignOnMessageResponseV1Xml {
-    sonrs: SignOnResponseXml,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-struct BankMessageResponseV1Xml {
-    stmttrnrs: Vec<StatementTransactionResponseXml>, // Matches the XML structure for multiple STMTTRNRS elements
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-struct SignOnResponseXml {
-    status: StatusXml,
-    dtserver: String,
-    language: Option<String>,
-    dtprofup: Option<String>,
-    fi: Option<FinancialInstitutionXml>,
-}
-
-impl From<SignOnResponseXml> for SignonResponse {
-    fn from(val: SignOnResponseXml) -> Self {
-        SignonResponse {
-            status: val.status.into(),
-            dtserver: OfxParser::parse_custom_datetime(&val.dtserver)
-                .inspect_err(|e: &String| error!("{e}"))
-                .unwrap_or_default(),
-            language: val.language,
-            dtprofup: val.dtprofup.map(|i: String| {
-                OfxParser::parse_custom_datetime(&i)
-                    .inspect_err(|e: &String| error!("{e}"))
-                    .unwrap_or_default()
-            }),
-            fi: val.fi.map(|i: FinancialInstitutionXml| i.into()),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-struct StatusXml {
-    code: i32,
-    severity: String,
-    message: Option<String>,
-}
-
-impl From<StatusXml> for Status {
-    fn from(val: StatusXml) -> Self {
-        Status {
-            code: val.code,
-            severity: val.severity,
-            message: val.message,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-struct FinancialInstitutionXml {
-    org: String,
-    fid: Option<String>,
-}
-
-impl From<FinancialInstitutionXml> for FinancialInstitution {
-    fn from(val: FinancialInstitutionXml) -> Self {
-        FinancialInstitution {
-            org: val.org,
-            fid: val.fid,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-struct StatementTransactionResponseXml {
-    trnuid: String,
-    status: StatusXml,
-    stmtrs: StatementResponseXml,
-}
-
-impl From<&StatementTransactionResponseXml> for StatementTransactionResponse {
-    fn from(val: &StatementTransactionResponseXml) -> Self {
-        StatementTransactionResponse {
-            trnuid: val.trnuid.clone(),
-            status: val.status.clone().into(),
-            stmtrs: val.stmtrs.clone().into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-struct StatementResponseXml {
-    curdef: String,
-    bankacctfrom: BankAccountFromXml,
-    banktranlist: Option<BankTransactionListXml>,
-    ledgerbal: Option<BalanceXml>,
-    availbal: Option<BalanceXml>,
-}
-
-impl From<StatementResponseXml> for StatementResponse {
-    fn from(val: StatementResponseXml) -> Self {
-        StatementResponse {
-            curdef: val.curdef,
-            bankacctfrom: val.bankacctfrom.into(),
-            banktranlist: val.banktranlist.map(|i: BankTransactionListXml| i.into()),
-            ledgerbal: val.ledgerbal.map(|i: BalanceXml| i.into()),
-            availbal: val.availbal.map(|i: BalanceXml| i.into()),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-struct BankAccountFromXml {
-    bankid: String,
-    acctid: String,
-    accttype: String,
-}
-
-impl From<BankAccountFromXml> for BankAccount {
-    fn from(val: BankAccountFromXml) -> Self {
-        BankAccount {
-            bankid: val.bankid,
-            acctid: val.acctid,
-            accttype: val.accttype,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-struct BankTransactionListXml {
-    dtstart: String,
-    dtend: String,
-    stmttrn: Vec<TransactionXml>,
-}
-
-impl From<BankTransactionListXml> for BankTransactionList {
-    fn from(val: BankTransactionListXml) -> Self {
-        BankTransactionList {
-            dtstart: OfxParser::parse_custom_datetime(&val.dtstart)
-                .inspect_err(|e: &String| error!("{e}"))
-                .unwrap_or_default(),
-            dtend: OfxParser::parse_custom_datetime(&val.dtend)
-                .inspect_err(|e: &String| error!("{e}"))
-                .unwrap_or_default(),
-            transactions: val
-                .stmttrn
-                .iter()
-                .map(|t: &TransactionXml| t.into())
-                .collect(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-struct BalanceXml {
-    balamt: f64,
-    dtasof: String,
-}
-
-impl From<BalanceXml> for Balance {
-    fn from(val: BalanceXml) -> Self {
-        Balance {
-            balamt: val.balamt,
-            dtasof: OfxParser::parse_custom_datetime(&val.dtasof)
-                .inspect_err(|e: &String| error!("{e}"))
-                .unwrap_or_default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-struct TransactionXml {
-    trntype: String,
-    dtposted: String,
-    trnamt: f64,
-    fitid: String,
-    name: Option<String>,
-    memo: Option<String>,
-}
-
-impl From<&TransactionXml> for Transaction {
-    fn from(val: &TransactionXml) -> Self {
-        Transaction {
-            trntype: val.trntype.clone(),
-            dtposted: OfxParser::parse_custom_datetime(&val.dtposted)
-                .inspect_err(|e| error!("Unable to parse dtserver date {}: {e:?}", val.dtposted))
-                .unwrap_or_default(),
-            trnamt: val.trnamt,
-            fitid: val.fitid.clone(),
-            name: val.name.clone(),
-            memo: val.memo.clone(),
-        }
-    }
-}
 
 pub struct OfxParser;
 
@@ -480,6 +224,156 @@ impl OfxParser {
         }
 
         Err("Invalid date format".into())
+    }
+}
+
+impl From<OfxDocumentXml> for OfxDocument {
+    fn from(value: OfxDocumentXml) -> Self {
+        OfxDocument {
+            header: value.header.into(),
+            body: value.body.into(),
+        }
+    }
+}
+
+impl From<OfxHeaderXml> for OfxHeader {
+    fn from(value: OfxHeaderXml) -> Self {
+        OfxHeader {
+            version: value.version,
+            security: value.security,
+            encoding: value.encoding,
+            charset: value.charset,
+            compression: value.compression,
+            old_file_uid: value.old_file_uid,
+            new_file_uid: value.new_file_uid,
+        }
+    }
+}
+
+impl From<OfxBodyXml> for OfxBody {
+    fn from(value: OfxBodyXml) -> Self {
+        OfxBody {
+            sign_on_response: value.signonmsgsrsv1.sonrs.into(),
+            bank_msgs: value
+                .bankmsgsrsv1
+                .stmttrnrs
+                .iter()
+                .map(|i: &StatementTransactionResponseXml| i.into())
+                .collect(),
+        }
+    }
+}
+
+impl From<SignOnResponseXml> for SignonResponse {
+    fn from(value: SignOnResponseXml) -> Self {
+        SignonResponse {
+            status: value.status.into(),
+            dtserver: OfxParser::parse_custom_datetime(&value.dtserver)
+                .inspect_err(|e: &String| error!("{e}"))
+                .unwrap_or_default(),
+            language: value.language,
+            dtprofup: value.dtprofup.map(|i: String| {
+                OfxParser::parse_custom_datetime(&i)
+                    .inspect_err(|e: &String| error!("{e}"))
+                    .unwrap_or_default()
+            }),
+            fi: value.fi.map(|i: FinancialInstitutionXml| i.into()),
+        }
+    }
+}
+
+impl From<StatusXml> for Status {
+    fn from(value: StatusXml) -> Self {
+        Status {
+            code: value.code,
+            severity: value.severity,
+            message: value.message,
+        }
+    }
+}
+
+impl From<FinancialInstitutionXml> for FinancialInstitution {
+    fn from(value: FinancialInstitutionXml) -> Self {
+        FinancialInstitution {
+            org: value.org,
+            fid: value.fid,
+        }
+    }
+}
+
+impl From<&StatementTransactionResponseXml> for StatementTransactionResponse {
+    fn from(value: &StatementTransactionResponseXml) -> Self {
+        StatementTransactionResponse {
+            trnuid: value.trnuid.clone(),
+            status: value.status.clone().into(),
+            stmtrs: value.stmtrs.clone().into(),
+        }
+    }
+}
+
+impl From<StatementResponseXml> for StatementResponse {
+    fn from(value: StatementResponseXml) -> Self {
+        StatementResponse {
+            curdef: value.curdef,
+            bankacctfrom: value.bankacctfrom.into(),
+            banktranlist: value.banktranlist.map(|i: BankTransactionListXml| i.into()),
+            ledgerbal: value.ledgerbal.map(|i: BalanceXml| i.into()),
+            availbal: value.availbal.map(|i: BalanceXml| i.into()),
+        }
+    }
+}
+
+impl From<BankAccountFromXml> for BankAccount {
+    fn from(value: BankAccountFromXml) -> Self {
+        BankAccount {
+            bankid: value.bankid,
+            acctid: value.acctid,
+            accttype: value.accttype,
+        }
+    }
+}
+
+impl From<BankTransactionListXml> for BankTransactionList {
+    fn from(value: BankTransactionListXml) -> Self {
+        BankTransactionList {
+            dtstart: OfxParser::parse_custom_datetime(&value.dtstart)
+                .inspect_err(|e: &String| error!("{e}"))
+                .unwrap_or_default(),
+            dtend: OfxParser::parse_custom_datetime(&value.dtend)
+                .inspect_err(|e: &String| error!("{e}"))
+                .unwrap_or_default(),
+            transactions: value
+                .stmttrn
+                .iter()
+                .map(|t: &TransactionXml| t.into())
+                .collect(),
+        }
+    }
+}
+
+impl From<BalanceXml> for Balance {
+    fn from(value: BalanceXml) -> Self {
+        Balance {
+            balamt: value.balamt,
+            dtasof: OfxParser::parse_custom_datetime(&value.dtasof)
+                .inspect_err(|e: &String| error!("{e}"))
+                .unwrap_or_default(),
+        }
+    }
+}
+
+impl From<&TransactionXml> for Transaction {
+    fn from(value: &TransactionXml) -> Self {
+        Transaction {
+            trntype: value.trntype.clone(),
+            dtposted: OfxParser::parse_custom_datetime(&value.dtposted)
+                .inspect_err(|e| error!("Unable to parse dtserver date {}: {e:?}", value.dtposted))
+                .unwrap_or_default(),
+            trnamt: value.trnamt,
+            fitid: value.fitid.clone(),
+            name: value.name.clone(),
+            memo: value.memo.clone(),
+        }
     }
 }
 
