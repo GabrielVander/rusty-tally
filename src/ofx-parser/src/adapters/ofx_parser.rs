@@ -64,20 +64,20 @@ struct SignOnResponseXml {
     fi: Option<FinancialInstitutionXml>,
 }
 
-impl Into<SignonResponse> for SignOnResponseXml {
-    fn into(self) -> SignonResponse {
+impl From<SignOnResponseXml> for SignonResponse {
+    fn from(val: SignOnResponseXml) -> Self {
         SignonResponse {
-            status: self.status.into(),
-            dtserver: OfxParser::parse_custom_datetime(&self.dtserver)
+            status: val.status.into(),
+            dtserver: OfxParser::parse_custom_datetime(&val.dtserver)
                 .inspect_err(|e: &String| error!("{e}"))
                 .unwrap_or_default(),
-            language: self.language,
-            dtprofup: self.dtprofup.map(|i: String| {
+            language: val.language,
+            dtprofup: val.dtprofup.map(|i: String| {
                 OfxParser::parse_custom_datetime(&i)
                     .inspect_err(|e: &String| error!("{e}"))
                     .unwrap_or_default()
             }),
-            fi: self.fi.map(|i: FinancialInstitutionXml| i.into()),
+            fi: val.fi.map(|i: FinancialInstitutionXml| i.into()),
         }
     }
 }
@@ -90,12 +90,12 @@ struct StatusXml {
     message: Option<String>,
 }
 
-impl Into<Status> for StatusXml {
-    fn into(self) -> Status {
+impl From<StatusXml> for Status {
+    fn from(val: StatusXml) -> Self {
         Status {
-            code: self.code,
-            severity: self.severity,
-            message: self.message,
+            code: val.code,
+            severity: val.severity,
+            message: val.message,
         }
     }
 }
@@ -107,11 +107,11 @@ struct FinancialInstitutionXml {
     fid: Option<String>,
 }
 
-impl Into<FinancialInstitution> for FinancialInstitutionXml {
-    fn into(self) -> FinancialInstitution {
+impl From<FinancialInstitutionXml> for FinancialInstitution {
+    fn from(val: FinancialInstitutionXml) -> Self {
         FinancialInstitution {
-            org: self.org,
-            fid: self.fid,
+            org: val.org,
+            fid: val.fid,
         }
     }
 }
@@ -124,12 +124,12 @@ struct StatementTransactionResponseXml {
     stmtrs: StatementResponseXml,
 }
 
-impl Into<StatementTransactionResponse> for &StatementTransactionResponseXml {
-    fn into(self) -> StatementTransactionResponse {
+impl From<&StatementTransactionResponseXml> for StatementTransactionResponse {
+    fn from(val: &StatementTransactionResponseXml) -> Self {
         StatementTransactionResponse {
-            trnuid: self.trnuid.clone(),
-            status: self.status.clone().into(),
-            stmtrs: self.stmtrs.clone().into(),
+            trnuid: val.trnuid.clone(),
+            status: val.status.clone().into(),
+            stmtrs: val.stmtrs.clone().into(),
         }
     }
 }
@@ -144,14 +144,14 @@ struct StatementResponseXml {
     availbal: Option<BalanceXml>,
 }
 
-impl Into<StatementResponse> for StatementResponseXml {
-    fn into(self) -> StatementResponse {
+impl From<StatementResponseXml> for StatementResponse {
+    fn from(val: StatementResponseXml) -> Self {
         StatementResponse {
-            curdef: self.curdef,
-            bankacctfrom: self.bankacctfrom.into(),
-            banktranlist: self.banktranlist.map(|i: BankTransactionListXml| i.into()),
-            ledgerbal: self.ledgerbal.map(|i: BalanceXml| i.into()),
-            availbal: self.availbal.map(|i: BalanceXml| i.into()),
+            curdef: val.curdef,
+            bankacctfrom: val.bankacctfrom.into(),
+            banktranlist: val.banktranlist.map(|i: BankTransactionListXml| i.into()),
+            ledgerbal: val.ledgerbal.map(|i: BalanceXml| i.into()),
+            availbal: val.availbal.map(|i: BalanceXml| i.into()),
         }
     }
 }
@@ -164,12 +164,12 @@ struct BankAccountFromXml {
     accttype: String,
 }
 
-impl Into<BankAccount> for BankAccountFromXml {
-    fn into(self) -> BankAccount {
+impl From<BankAccountFromXml> for BankAccount {
+    fn from(val: BankAccountFromXml) -> Self {
         BankAccount {
-            bankid: self.bankid,
-            acctid: self.acctid,
-            accttype: self.accttype,
+            bankid: val.bankid,
+            acctid: val.acctid,
+            accttype: val.accttype,
         }
     }
 }
@@ -182,16 +182,16 @@ struct BankTransactionListXml {
     stmttrn: Vec<TransactionXml>,
 }
 
-impl Into<BankTransactionList> for BankTransactionListXml {
-    fn into(self) -> BankTransactionList {
+impl From<BankTransactionListXml> for BankTransactionList {
+    fn from(val: BankTransactionListXml) -> Self {
         BankTransactionList {
-            dtstart: OfxParser::parse_custom_datetime(&self.dtstart)
+            dtstart: OfxParser::parse_custom_datetime(&val.dtstart)
                 .inspect_err(|e: &String| error!("{e}"))
                 .unwrap_or_default(),
-            dtend: OfxParser::parse_custom_datetime(&self.dtend)
+            dtend: OfxParser::parse_custom_datetime(&val.dtend)
                 .inspect_err(|e: &String| error!("{e}"))
                 .unwrap_or_default(),
-            transactions: self
+            transactions: val
                 .stmttrn
                 .iter()
                 .map(|t: &TransactionXml| t.into())
@@ -207,11 +207,11 @@ struct BalanceXml {
     dtasof: String,
 }
 
-impl Into<Balance> for BalanceXml {
-    fn into(self) -> Balance {
+impl From<BalanceXml> for Balance {
+    fn from(val: BalanceXml) -> Self {
         Balance {
-            balamt: self.balamt,
-            dtasof: OfxParser::parse_custom_datetime(&self.dtasof)
+            balamt: val.balamt,
+            dtasof: OfxParser::parse_custom_datetime(&val.dtasof)
                 .inspect_err(|e: &String| error!("{e}"))
                 .unwrap_or_default(),
         }
@@ -229,17 +229,17 @@ struct TransactionXml {
     memo: Option<String>,
 }
 
-impl Into<Transaction> for &TransactionXml {
-    fn into(self) -> Transaction {
+impl From<&TransactionXml> for Transaction {
+    fn from(val: &TransactionXml) -> Self {
         Transaction {
-            trntype: self.trntype.clone(),
-            dtposted: OfxParser::parse_custom_datetime(&self.dtposted)
-                .inspect_err(|e| error!("Unable to parse dtserver date {}: {:?}", self.dtposted, e))
+            trntype: val.trntype.clone(),
+            dtposted: OfxParser::parse_custom_datetime(&val.dtposted)
+                .inspect_err(|e| error!("Unable to parse dtserver date {}: {e:?}", val.dtposted))
                 .unwrap_or_default(),
-            trnamt: self.trnamt,
-            fitid: self.fitid.clone(),
-            name: self.name.clone(),
-            memo: self.memo.clone(),
+            trnamt: val.trnamt,
+            fitid: val.fitid.clone(),
+            name: val.name.clone(),
+            memo: val.memo.clone(),
         }
     }
 }
@@ -322,45 +322,45 @@ impl OfxParser {
             match key.as_str() {
                 "OFXHEADER" => {
                     if value != "100" {
-                        error!("Unsupported OFXHEADER value: {}. Expected '100'.", value);
+                        error!("Unsupported OFXHEADER value: {value}. Expected '100'.");
                         return Err(OfxError::InvalidVersion(value.to_string()));
                     }
-                    debug!("OFXHEADER validated: {}", value);
+                    debug!("OFXHEADER validated: {value}");
                 }
                 "VERSION" => {
                     if value != "102" {
-                        error!("Unsupported OFX version: {}. Expected '102'.", value);
+                        error!("Unsupported OFX version: {value}. Expected '102'.");
                         return Err(OfxError::InvalidVersion(value.to_string()));
                     }
                     version = Some(value.to_string());
-                    debug!("VERSION set to: {}", value);
+                    debug!("VERSION set to: {value}");
                 }
                 "SECURITY" => {
                     security = Some(value.to_string());
-                    debug!("SECURITY set to: {}", value);
+                    debug!("SECURITY set to: {value}");
                 }
                 "ENCODING" => {
                     encoding = Some(value.to_string());
-                    debug!("ENCODING set to: {}", value);
+                    debug!("ENCODING set to: {value}");
                 }
                 "CHARSET" => {
                     charset = Some(value.to_string());
-                    debug!("CHARSET set to: {}", value);
+                    debug!("CHARSET set to: {value}");
                 }
                 "COMPRESSION" => {
                     compression = Some(value.to_string());
-                    debug!("COMPRESSION set to: {}", value);
+                    debug!("COMPRESSION set to: {value}");
                 }
                 "OLDFILEUID" => {
                     old_file_uid = Some(value.to_string());
-                    debug!("OLDFILEUID set to: {}", value);
+                    debug!("OLDFILEUID set to: {value}");
                 }
                 "NEWFILEUID" => {
                     new_file_uid = Some(value.to_string());
-                    debug!("NEWFILEUID set to: {}", value);
+                    debug!("NEWFILEUID set to: {value}");
                 }
                 _ => {
-                    warn!("Unknown header key: {}. Value: {}. Ignoring.", key, value);
+                    warn!("Unknown header key: {key}. Value: {value}. Ignoring.");
                 }
             }
         }
@@ -428,7 +428,7 @@ impl OfxParser {
                 // 5. Parse the string using the correct format
                 let format_str = "%Y%m%d%H%M%S%z";
                 let date_time: DateTime<FixedOffset> =
-                    DateTime::parse_from_str(&parsable_string, &format_str)
+                    DateTime::parse_from_str(&parsable_string, format_str)
                         .map_err(|e| format!("Unble to parse processed date: {e:?}"))?;
 
                 return Ok(date_time);

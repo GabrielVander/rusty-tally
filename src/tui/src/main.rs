@@ -212,16 +212,3 @@ fn format_amount(a: f64) -> String {
         format!(" ${a:.2}")
     }
 }
-
-fn human_date(yyyymmdd: &str) -> String {
-    if yyyymmdd.len() >= 8 {
-        format!(
-            "{}-{}-{}",
-            &yyyymmdd[0..4],
-            &yyyymmdd[4..6],
-            &yyyymmdd[6..8]
-        )
-    } else {
-        yyyymmdd.to_string()
-    }
-}
