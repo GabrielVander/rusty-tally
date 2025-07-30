@@ -85,8 +85,13 @@ pub struct Balance {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct OfxBody {
+    pub sign_on_response: SignonResponse,
+    pub bank_msgs: Vec<StatementTransactionResponse>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct OfxDocument {
     pub header: OfxHeader,
-    pub signon: SignonResponse,
-    pub bank_msgs: Vec<StatementTransactionResponse>,
+    pub body: OfxBody,
 }

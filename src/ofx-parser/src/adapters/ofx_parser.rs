@@ -1,6 +1,7 @@
 use crate::domain::entities::ofx::{
-    Balance, BankAccount, BankTransactionList, FinancialInstitution, OfxDocument, OfxHeader,
-    SignonResponse, StatementResponse, StatementTransactionResponse, Status, Transaction,
+    Balance, BankAccount, BankTransactionList, FinancialInstitution, OfxBody, OfxDocument,
+    OfxHeader, SignonResponse, StatementResponse, StatementTransactionResponse, Status,
+    Transaction,
 };
 use chrono::{DateTime, FixedOffset};
 use log::{debug, error, info, warn};
@@ -35,11 +36,63 @@ pub enum OfxError {
 
 pub type OfxResult<T> = Result<T, OfxError>;
 
+#[derive(Debug)]
+struct OfxDocumentXml {
+    header: OfxHeader,
+    body: OfxBodyXml,
+}
+
+impl From<OfxDocumentXml> for OfxDocument {
+    fn from(value: OfxDocumentXml) -> Self {
+        OfxDocument {
+            header: value.header.into(),
+            body: value.body.into(),
+        }
+    }
+}
+struct OfxHeaderXml {
+    version: String,
+    security: Option<String>,
+    encoding: Option<String>,
+    charset: Option<String>,
+    compression: Option<String>,
+    old_file_uid: Option<String>,
+    new_file_uid: Option<String>,
+}
+
+impl From<OfxHeaderXml> for OfxHeader {
+    fn from(value: OfxHeaderXml) -> Self {
+        OfxHeader {
+            version: value.version,
+            security: value.security,
+            encoding: value.encoding,
+            charset: value.charset,
+            compression: value.compression,
+            old_file_uid: value.old_file_uid,
+            new_file_uid: value.new_file_uid,
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
-struct OfxXml {
+struct OfxBodyXml {
     signonmsgsrsv1: SignOnMessageResponseV1Xml,
     bankmsgsrsv1: BankMessageResponseV1Xml,
+}
+
+impl From<OfxBodyXml> for OfxBody {
+    fn from(value: OfxBodyXml) -> Self {
+        OfxBody {
+            sign_on_response: value.signonmsgsrsv1.sonrs.into(),
+            bank_msgs: value
+                .bankmsgsrsv1
+                .stmttrnrs
+                .iter()
+                .map(|i: &StatementTransactionResponseXml| i.into())
+                .collect(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -269,26 +322,18 @@ impl OfxParser {
 
         let (header_content, body_content) = content.split_at(xml_start_pos);
 
-        let header = Self::parse_header(header_content)?;
+        let header: OfxHeader = Self::parse_header(header_content)?;
         debug!("Successfully parsed header: {header:#?}");
 
         // The body is XML content, starting from the second part
-        let (signon, bank_msgs): (SignOnResponseXml, Vec<StatementTransactionResponseXml>) =
-            Self::parse_xml_body(body_content)?;
+        let xml_body: OfxBodyXml = Self::parse_xml_body(body_content)?;
 
-        info!(
-            "XML body parsed successfully. Signon messages: 1, Bank messages: {}",
-            bank_msgs.len()
-        );
-
-        Ok(OfxDocument {
+        let xml_document: OfxDocumentXml = OfxDocumentXml {
             header,
-            signon: signon.into(),
-            bank_msgs: bank_msgs
-                .iter()
-                .map(|i: &StatementTransactionResponseXml| i.into())
-                .collect(),
-        })
+            body: xml_body,
+        };
+
+        Ok(OfxDocument::from(xml_document))
     }
 
     fn parse_header(header_content: &str) -> OfxResult<OfxHeader> {
@@ -384,23 +429,22 @@ impl OfxParser {
         })
     }
 
-    fn parse_xml_body(
-        body: &str,
-    ) -> OfxResult<(SignOnResponseXml, Vec<StatementTransactionResponseXml>)> {
+    fn parse_xml_body(body: &str) -> OfxResult<OfxBodyXml> {
         info!(
             "Deserializing XML body. Sample: {:#?}",
             body.lines().collect::<Vec<_>>()
         );
 
-        let ofx_xml: OfxXml = from_str(body)
+        let ofx_xml: OfxBodyXml = from_str::<OfxBodyXml>(body)
             .inspect_err(|e| {
                 error!("XML deserialization failed: {e:?}. Body content may be malformed.")
             })
-            .map_err(OfxError::Xml)?;
+            .map_err(OfxError::Xml)
+            .inspect(|o| {
+                debug!("Successfully deserialized XML body: {o:#?}");
+            })?;
 
-        debug!("XML deserialization successful. Extracting Signon and Bank messages.");
-
-        Ok((ofx_xml.signonmsgsrsv1.sonrs, ofx_xml.bankmsgsrsv1.stmttrnrs))
+        Ok(ofx_xml)
     }
 
     pub fn parse_custom_datetime(s: &str) -> Result<DateTime<FixedOffset>, String> {

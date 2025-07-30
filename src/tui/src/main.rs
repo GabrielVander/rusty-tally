@@ -64,7 +64,8 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let content = fs::read_to_string(&args.path)?;
     let ofx: Vec<Transaction> = OfxParser::parse_string(content.as_ref()).map_or(Vec::new(), |d| {
-        d.bank_msgs
+        d.body
+            .bank_msgs
             .iter()
             .flat_map(|i| {
                 i.stmtrs
