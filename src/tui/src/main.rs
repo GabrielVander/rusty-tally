@@ -5,7 +5,7 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ofx_parser::{OfxParser, Transaction};
+use ofx_parser::{adapters::ofx_parser::OfxParser, domain::entities::ofx::Transaction};
 use ratatui::{
     Terminal,
     backend::CrosstermBackend,
